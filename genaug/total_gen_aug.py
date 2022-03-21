@@ -249,28 +249,37 @@ class CBAug(FewGLUEAug):
         return new_questions,new_passages,new_labels
 
     def augment(self,data_path,aug_func,aug_func_name,aug_kwargs,aug_num=1):
-        examples=self.read_jsonl(os.path.join(data_path,"{}/train.jsonl".format(self.TASK_NAME)))
-        new_examples=[]
-        for e in tqdm(examples):
-            new_premise,new_hypothesis,new_label=self.aug_with_pattern(e["hypothesis"],e["premise"],e["label"],aug_func,**aug_kwargs,aug_num=aug_num)
-            if isinstance(new_premise,list):
-                for (x,y,z) in zip(new_premise,new_hypothesis,new_label):
+        # examples=self.read_jsonl(os.path.join(data_path,"{}/train.jsonl".format(self.TASK_NAME)))
+        in_dir = '/home/wenjiaxin/cad/data/nli/snli-base-m12-balance/ori_data'
+        out_dir = '/home/wenjiaxin/cad/data/nli/snli-base-m12-balance/flipDA'
+        if not os.path.exists(out_dir):
+            os.makedirs(out_dir)
+        for split in ['train', 'dev']:
+            with open(f"{in_dir}/{split}.json", 'r') as f:
+                examples = json.load(f)
+            
+            new_examples=[]
+            for e in tqdm(examples):
+                new_premise,new_hypothesis,new_label=self.aug_with_pattern(e["hypothesis"],e["premise"],e["label"],aug_func,**aug_kwargs,aug_num=aug_num)
+                if isinstance(new_premise,list):
+                    for (x,y,z) in zip(new_premise,new_hypothesis,new_label):
+                        tmp_e=copy.deepcopy(e)
+                        tmp_e["hypothesis"]=x 
+                        tmp_e["premise"]=y
+                        tmp_e["label"]=z
+                        tmp_e["orig_label"]=e["label"]
+                        new_examples.append(tmp_e)
+                else:
                     tmp_e=copy.deepcopy(e)
-                    tmp_e["hypothesis"]=x 
-                    tmp_e["premise"]=y
-                    tmp_e["label"]=z
+                    tmp_e["hypothesis"]=new_premise
+                    tmp_e["premise"]=new_hypothesis
+                    tmp_e["label"]=new_label
                     tmp_e["orig_label"]=e["label"]
                     new_examples.append(tmp_e)
-            else:
-                tmp_e=copy.deepcopy(e)
-                tmp_e["hypothesis"]=new_premise
-                tmp_e["premise"]=new_hypothesis
-                tmp_e["label"]=new_label
-                tmp_e["orig_label"]=e["label"]
-                new_examples.append(tmp_e)
-        if not os.path.exists(os.path.join(data_path,"augmented/{}".format(self.TASK_NAME))):
-            os.makedirs(os.path.join(data_path,"augmented/{}".format(self.TASK_NAME)))
-        self.save_jsonl(new_examples,os.path.join(data_path,"augmented/{}/{}_train.jsonl".format(self.TASK_NAME,aug_func_name)))
+            
+            with open(f"{out_dir}/{split}.json", 'w') as f:
+                json.dump(new_examples, f, indent=2)
+            # self.save_jsonl(new_examples,os.path.join(data_path,"augmented/{}/{}_train.jsonl".format(self.TASK_NAME,aug_func_name)))
         return new_examples
 
 class BoolQAug(FewGLUEAug):
@@ -682,7 +691,7 @@ if __name__ == "__main__":
         os.makedirs(data_path)
     set_seed(1)
     aug_num=args.aug_num
-    t5aug=gen_aug_T5.T5Aug()
+    t5aug=gen_aug_T5.T5Aug('/data/wenjiaxin/checkpoints/t5-large')
     aug_func=t5aug.generate_blanks
     aug_func_name='t5_{}_{}_{}_sample{}_beam{}_augnum{}'.format(args.label_type,args.mask_ratio,args.aug_type,int(args.do_sample),args.num_beams,aug_num)
     aug_kwargs={'label_type':args.label_type,'mask_ratio':args.mask_ratio,'aug_type':args.aug_type,'aug_kwargs':{'do_sample':args.do_sample,'num_beams':args.num_beams,'num_return_sequences':1}}
